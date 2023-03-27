@@ -25,7 +25,7 @@
                     <tr>
                         <td>{{ $product->name_product }}</td>
                         <td><img  style="height: 60px;width: 50px" src="{{ asset('img/Products/'.$product->image_product) }}"/></td>
-                        <td><a class="btn btn-green"  style="background: #499b4a;color: white" href="{{ route('detail_produit', ['id' => $product->id_product]) }}">S'y rendre</a></td>
+                        <td><a class="btn btn-green" id="btn-search" href="{{ route('detail_produit', ['id' => $product->id_product]) }}">S'y rendre</a></td>
                     </tr>
                 @endforeach
                 </tbody>
