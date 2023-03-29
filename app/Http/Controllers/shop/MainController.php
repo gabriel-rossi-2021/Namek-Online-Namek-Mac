@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\shop;
 
 use App\Http\Controllers\Controller;
+use App\Models\Address;
 use App\Models\Category;
 use App\Models\Login;
 use App\Models\Product;
@@ -33,18 +34,18 @@ class MainController extends Controller
 
         // Récupère la valeur du paramètre de requête "tri"
         $tri = $request->input('tri');
-    
+
         // Tri les produits en fonction de la valeur de "tri"
         if ($tri == 'prix-croissant') {
             $produits = Product::orderBy('price_ht', 'asc')->get();
-        } 
+        }
         else if ($tri == 'prix-decroissant') {
             $produits = Product::orderBy('price_ht', 'desc')->get();
-        } 
+        }
         else {
             $produits = Product::all();
         }
-    
+
         return view('shop.produit', compact('produits'));
     }
 
@@ -64,10 +65,10 @@ class MainController extends Controller
         // Tri les produits en fonction de la valeur de "tri"
         if ($tri == 'prix-croissant') {
             $query->orderBy('price_ht', 'asc');
-        } 
+        }
         else if ($tri == 'prix-decroissant') {
             $query->orderBy('price_ht', 'desc');
-        } 
+        }
 
         // Récupère les produits triés
         $produits = $query->get();
@@ -93,17 +94,27 @@ class MainController extends Controller
         return view('login');
     }
 
+    // SALT FIXE
+    protected $salt = 'i;151-120#';
+
     public function login(Request $request)
     {
-        $credentials = $request->only('email', 'password');
-        // Définir le salt
-        $salt = 'i;151-120#';
+
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
+
+        $credentials = [
+            'email' => $request->input('email'),
+            'password' => $request->input('password') . $this->salt,
+        ];
+
         // Récupérer l'utilisateur correspondant
-        $user = User::where('email', $credentials['email'])->first();
+        // $user = User::where('email', $credentials['email'])->first();
 
         // Vérification du mot de passe en ajoutant le salt
-        if ($user && Hash::check($credentials['password'].$salt, $user->password)) {
-            Auth::login($user);
+        if (Auth::attempt($credentials)) {
             // Si les informations d'identification sont valides, l'utilisateur est connecté
             return redirect()->intended('/');
         }
@@ -130,21 +141,33 @@ class MainController extends Controller
     // CREATION UTILISATEUR
     public function register(Request $request)
     {
+
+        // Variable qui stock le pays par defaut
+        $PaysParDefaut = 'Suisse';
+
         // Valider les données du formulaire
         $validatedData = $request->validate([
-            'titre' => 'required',
+            'titre' => 'required|max:50',
             'phone' => 'required',
-            'name' => 'required|string|max:255',
-            'lastName' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users',
+            'name' => 'required|string|max:50',
+            'lastName' => 'required|string|max:50',
+            'username' => 'required|string|max:50|unique:users',
             'email' => 'required|string|email|max:255|unique:users',
-            'psw' => 'required|string|min:8',
+            'psw' => 'required',
+            'confirm-psw' => 'required|same:psw',
             'birth' => 'required|date|before_or_equal:'.now()->subYears(18)->format('Y-m-d'),
+            'rue' => 'required',
+            'num-rue' => 'required',
+            'ville' => 'required',
+            'npa' => 'required',
         ]);
 
-        // Ajouter un salt au mot de passe
-        $salt = 'i;151-120#';
-        $password = $validatedData['psw'] . $salt;
+        $password = $validatedData['psw'];
+
+        // Vérifier si le mot de passe correspond à la confirmation
+        if ($password !== $validatedData['confirm-psw']) {
+            return redirect()->back()->withErrors(['password' => 'Le mot de passe et la confirmation ne correspondent pas.'])->withInput();
+        }
 
         // Créer un nouvel utilisateur
         $user = new User();
@@ -154,13 +177,30 @@ class MainController extends Controller
         $user->last_name = $validatedData['lastName'];
         $user->username = $validatedData['username'];
         $user->email = $validatedData['email'];
-        $user->password = Hash::make($password);
+        $user->password = $password . $this->salt;
         $user->birth_date = $validatedData['birth'];
         $user->function_id = 3;
+
+        // Créer une nouvelle adresse
+        $address = new Address();
+        $address->street = $validatedData['rue'];
+        $address->street_number = $validatedData['num-rue'];
+        $address->city = $validatedData['ville'];
+        $address->NPA = $validatedData['npa'];
+        $address->country = $PaysParDefaut;
+        $address->save();
+
+        // Lier l'adresse à l'utilisateur
+        $user->address()->associate($address);
+
+        // Enregistrer l'utilisateur
         $user->save();
 
-        // Rediriger vers la page de connexion
-        return redirect('/login');
+        // Connecter l'utilisateur
+        auth()->login($user);
+
+        // Rediriger vers la page d'accueil
+        return redirect('/');
     }
 
     public function search(Request $request)
